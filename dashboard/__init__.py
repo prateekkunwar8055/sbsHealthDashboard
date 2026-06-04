@@ -1,0 +1,2 @@
+"""Hospital BI dashboard package."""
+
