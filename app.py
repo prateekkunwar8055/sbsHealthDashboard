@@ -35,7 +35,7 @@ def authenticate() -> None:
     credentials = get_auth_credentials()
     if credentials is None:
         expected_username, expected_password = "admin", "admin"
-        st.sidebar.info("No Streamlit auth secrets found. Using fallback credentials: admin / admin")
+        st.sidebar.info("Enter your user id and password")
     else:
         expected_username, expected_password = credentials
 
