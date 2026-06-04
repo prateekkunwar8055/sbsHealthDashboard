@@ -21,7 +21,7 @@ from dashboard.metrics import (
 from dashboard.parsing import build_dashboard_data
 
 
-APP_TITLE = "Hospital BI Dashboard"
+APP_TITLE = "SBS Hospital BI Dashboard"
 
 
 def get_auth_credentials() -> tuple[str, str] | None:
