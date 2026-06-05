@@ -442,7 +442,7 @@ def main() -> None:
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
         refresh_minutes = st.number_input("Auto-refresh interval, minutes", min_value=1, max_value=60, value=5)
         manual_refresh = st.button("Refresh now", width="stretch")
-        st.caption(f"Last screen refresh: {datetime.now():%d %b %Y, %H:%M:%S}")
+        st.caption(f"Last screen refresh: {datetime.now(ZoneInfo('Asia/Kolkata')):%d %b %Y, %H:%M:%S} (IST)")
 
         if "refresh_token" not in st.session_state:
             st.session_state.refresh_token = 0
