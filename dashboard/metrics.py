@@ -42,14 +42,25 @@ def executive_kpis(ipd: pd.DataFrame) -> dict[str, float]:
         case_ids = ipd.apply(_case_id, axis=1)
         temp = ipd.copy()
         temp["_case_id"] = case_ids
-        cases = int(temp["_case_id"].dropna().nunique())
-        # count surgeries by unique case id to avoid double-counting
-        surgeries = int(
-            temp[temp.get("is_surgery", False)]
-            .dropna(subset=["_case_id"])
-            .drop_duplicates(subset=["_case_id"]) 
-            .shape[0]
-        )
+        # include hospital in the case key so identical IDs in different hospitals are distinct
+        if "hospital" in temp.columns:
+            temp["_case_key"] = temp["hospital"].astype(str).fillna("") + "|" + temp["_case_id"].astype(str)
+            cases = int(temp["_case_key"].dropna().nunique())
+            surgeries = int(
+                temp[temp.get("is_surgery", False)]
+                .dropna(subset=["_case_key"]) 
+                .drop_duplicates(subset=["_case_key"]) 
+                .shape[0]
+            )
+        else:
+            temp["_case_key"] = temp["_case_id"]
+            cases = int(temp["_case_key"].dropna().nunique())
+            surgeries = int(
+                temp[temp.get("is_surgery", False)]
+                .dropna(subset=["_case_key"]) 
+                .drop_duplicates(subset=["_case_key"]) 
+                .shape[0]
+            )
     hospital_revenue = money(ipd, "Hospital")
     total_deposit = money(ipd, "Tot AmtDeposit")
     discount = money(ipd, "Discount")
