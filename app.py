@@ -1,6 +1,3 @@
-Here is the full, completed, and corrected `app.py` script. The indentation alignment error in the `main()` function has been completely fixed so you can copy and paste this directly into your file.
-
-```python
 from __future__ import annotations
 
 from datetime import datetime
