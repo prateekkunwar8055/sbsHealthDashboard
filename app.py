@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +22,7 @@ from dashboard.metrics import (
 from dashboard.parsing import build_dashboard_data
 
 
-APP_TITLE = "SBS Hospital BI Dashboard"
+APP_TITLE = "Hospital BI Dashboard"
 
 # Public Google Sheet URLs to load by default when requested in the sidebar
 DEFAULT_GOOGLE_SHEETS: dict[str, str] = {
@@ -67,7 +68,7 @@ def authenticate() -> None:
     credentials = get_auth_credentials()
     expected_username, expected_password = credentials if credentials else ("admin", "admin")
     if credentials is None:
-        st.sidebar.info("Welcome to SBS Hospital BI Dashboard")
+        st.sidebar.info("Streamlit auth secrets are not configured. Set secrets to protect the app.")
 
     display_logo()
     st.sidebar.markdown("### Secure login")
@@ -442,7 +443,8 @@ def main() -> None:
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
         refresh_minutes = st.number_input("Auto-refresh interval, minutes", min_value=1, max_value=60, value=5)
         manual_refresh = st.button("Refresh now", width="stretch")
-        
+        st.caption(f"Last screen refresh: {datetime.now(ZoneInfo('Asia/Kolkata')):%d %b %Y, %H:%M:%S} (IST)")
+
         if "refresh_token" not in st.session_state:
             st.session_state.refresh_token = 0
         if manual_refresh:
