@@ -423,12 +423,12 @@ def main() -> None:
 
     defaults = default_sources()
     with st.sidebar:
-    st.header("Data Sources")
+        st.header("Data Sources")
 
-        if st.session_state.authenticated:
-            if st.button("Logout", use_container_width=True):
-                st.session_state.authenticated = False
-                st.rerun()
+            if st.session_state.authenticated:
+                if st.button("Logout", use_container_width=True):
+                    st.session_state.authenticated = False
+                    st.rerun()
 
    
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
