@@ -21,57 +21,71 @@ from dashboard.metrics import (
 from dashboard.parsing import build_dashboard_data
 
 
-APP_TITLE = "SBS Hospital BI Dashboard"
+APP_TITLE = "Hospital BI Dashboard"
+
+# Public Google Sheet URLs to load by default when requested in the sidebar
+DEFAULT_GOOGLE_SHEETS: dict[str, str] = {
+    "Balajee": "https://docs.google.com/spreadsheets/d/1-dUP_tf8PqFjozsRhfhgG1Y5GAfMk2v2nWk74b9esac/edit?usp=sharing",
+    "SBS Andheri": "https://docs.google.com/spreadsheets/d/1M11VtPy7F7_TFK02odQVgsjJKiWebCuCOP-j42GQLcY/edit?usp=sharing",
+    "Doctors": "https://docs.google.com/spreadsheets/d/1giSamK4KRjz5e5UZYN7JS18K5eCp4E0J/edit?usp=sharing&ouid=105600740720826570205&rtpof=true&sd=true",
+}
 
 
 def get_auth_credentials() -> tuple[str, str] | None:
-    auth = st.secrets.get("auth")
-    if isinstance(auth, dict) and auth.get("user") and auth.get("pass"):
-        return auth["user"], auth["pass"]
+    try:
+        auth = st.secrets.get("auth") or {}
+    except FileNotFoundError:
+        return None
+    except Exception:
+        auth = {}
+
+    if isinstance(auth, dict):
+        user = auth.get("user") or auth.get("username")
+        pwd = auth.get("pass") or auth.get("password") or auth.get("pwd")
+        if user and pwd:
+            return user, pwd
     return None
 
 
+def display_logo() -> None:
+    logo_path = Path(__file__).parent / "logo.png"
+    if logo_path.exists():
+        st.sidebar.image(str(logo_path), use_column_width=True)
+
+
 def authenticate() -> None:
-    credentials = get_auth_credentials()
-
-    if credentials is None:
-        expected_username, expected_password = "admin", "admin"
-        st.sidebar.info("Enter your user id and password")
-    else:
-        expected_username, expected_password = credentials
-
-    if st.session_state.authenticated:
+    # If already authenticated in session, show logout control and skip login
+    if st.session_state.get("authenticated"):
+        display_logo()
+        with st.sidebar:
+            st.markdown("### Secure login")
+            if st.button("Log out"):
+                st.session_state.pop("authenticated", None)
+                st.experimental_rerun()
         return
 
-    username = st.sidebar.text_input(
-        "Username",
-        key="auth_username",
-    )
+    credentials = get_auth_credentials()
+    expected_username, expected_password = credentials if credentials else ("admin", "admin")
+    if credentials is None:
+        st.sidebar.info("Streamlit auth secrets are not configured. Set secrets to protect the app.")
 
-    password = st.sidebar.text_input(
-        "Password",
-        type="password",
-        key="auth_password",
-    )
+    display_logo()
+    st.sidebar.markdown("### Secure login")
+    username = st.sidebar.text_input("Username", key="auth_username")
+    password = st.sidebar.text_input("Password", type="password", key="auth_password")
+    if not username or not password:
+        st.sidebar.warning("Enter your credentials to continue.")
+        st.stop()
+    if username != expected_username or password != expected_password:
+        st.sidebar.error("Invalid username or password.")
+        st.stop()
 
-    login_clicked = st.sidebar.button(
-        "Login",
-        key="login_button",
-    )
-
-    if login_clicked:
-        if username == expected_username and password == expected_password:
-            st.session_state.authenticated = True
-            st.rerun()
-        else:
-            st.sidebar.error("Invalid username or password.")
-
-    st.stop()
+    # Mark session as authenticated so subsequent reruns keep the user logged in
+    st.session_state["authenticated"] = True
 
 
 st.set_page_config(page_title=APP_TITLE, page_icon=":bar_chart:", layout="wide")
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+
 
 def format_money(value: float) -> str:
     if abs(value) >= 10_000_000:
@@ -424,12 +438,7 @@ def main() -> None:
     defaults = default_sources()
     with st.sidebar:
         st.header("Data Sources")
-
-        if st.session_state.authenticated:
-            if st.button("Logout", use_container_width=True):
-                st.session_state.authenticated = False
-                st.rerun()
-
+        use_defaults = st.checkbox("Load default public Google Sheets", value=True)
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
         refresh_minutes = st.number_input("Auto-refresh interval, minutes", min_value=1, max_value=60, value=5)
         manual_refresh = st.button("Refresh now", width="stretch")
@@ -441,9 +450,27 @@ def main() -> None:
             st.session_state.refresh_token += 1
             st.cache_data.clear()
 
-        balajee = load_source_from_controls("Balajee", defaults["Balajee"])
-        sbs = load_source_from_controls("SBS Andheri", defaults["SBS Andheri"])
-        doctors = load_source_from_controls("Doctors", defaults["Doctors"])
+        balajee = None
+        sbs = None
+        doctors = None
+        if use_defaults:
+            # attempt to download the public sheets
+            try:
+                balajee = download_google_sheet(DEFAULT_GOOGLE_SHEETS["Balajee"], "Balajee")
+            except Exception as exc:  # pragma: no cover - surfaced in UI
+                st.sidebar.error(f"Could not load Balajee sheet: {exc}")
+            try:
+                sbs = download_google_sheet(DEFAULT_GOOGLE_SHEETS["SBS Andheri"], "SBS Andheri")
+            except Exception as exc:  # pragma: no cover - surfaced in UI
+                st.sidebar.error(f"Could not load SBS Andheri sheet: {exc}")
+            try:
+                doctors = download_google_sheet(DEFAULT_GOOGLE_SHEETS["Doctors"], "Doctors")
+            except Exception as exc:  # pragma: no cover - surfaced in UI
+                st.sidebar.error(f"Could not load Doctors sheet: {exc}")
+        else:
+            balajee = load_source_from_controls("Balajee", defaults["Balajee"])
+            sbs = load_source_from_controls("SBS Andheri", defaults["SBS Andheri"])
+            doctors = load_source_from_controls("Doctors", defaults["Doctors"])
 
         st.divider()
         st.caption(
@@ -498,5 +525,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-```
