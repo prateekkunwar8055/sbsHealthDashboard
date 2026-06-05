@@ -33,24 +33,45 @@ def get_auth_credentials() -> tuple[str, str] | None:
 
 def authenticate() -> None:
     credentials = get_auth_credentials()
+
     if credentials is None:
         expected_username, expected_password = "admin", "admin"
         st.sidebar.info("Enter your user id and password")
     else:
         expected_username, expected_password = credentials
 
-    username = st.sidebar.text_input("Username", key="auth_username")
-    password = st.sidebar.text_input("Password", type="password", key="auth_password")
-    if not username or not password:
-        st.sidebar.warning("Enter your credentials to continue.")
-        st.stop()
-    if username != expected_username or password != expected_password:
-        st.sidebar.error("Invalid username or password.")
-        st.stop()
+    if st.session_state.authenticated:
+        return
+
+    username = st.sidebar.text_input(
+        "Username",
+        key="auth_username",
+    )
+
+    password = st.sidebar.text_input(
+        "Password",
+        type="password",
+        key="auth_password",
+    )
+
+    login_clicked = st.sidebar.button(
+        "Login",
+        key="login_button",
+    )
+
+    if login_clicked:
+        if username == expected_username and password == expected_password:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.sidebar.error("Invalid username or password.")
+
+    st.stop()
 
 
 st.set_page_config(page_title=APP_TITLE, page_icon=":bar_chart:", layout="wide")
-
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
 def format_money(value: float) -> str:
     if abs(value) >= 10_000_000:
@@ -402,7 +423,14 @@ def main() -> None:
 
     defaults = default_sources()
     with st.sidebar:
-        st.header("Data Sources")
+    st.header("Data Sources")
+
+        if st.session_state.authenticated:
+            if st.button("Logout", use_container_width=True):
+                st.session_state.authenticated = False
+                st.rerun()
+
+   
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
         refresh_minutes = st.number_input("Auto-refresh interval, minutes", min_value=1, max_value=60, value=5)
         manual_refresh = st.button("Refresh now", width="stretch")
