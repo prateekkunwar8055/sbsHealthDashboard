@@ -26,8 +26,30 @@ def executive_kpis(ipd: pd.DataFrame) -> dict[str, float]:
             "surgery_rate": 0,
             "discount_rate": 0,
         }
-    cases = len(ipd)
-    surgeries = int(ipd.get("is_surgery", pd.Series(dtype=bool)).fillna(False).sum())
+    # Derive a stable case identifier to avoid double-counting rows that belong to same case
+    id_cols = [c for c in ["YIPD", "CIPD", "patient_name"] if c in ipd.columns]
+    if not id_cols:
+        cases = len(ipd)
+        surgeries = int(ipd.get("is_surgery", pd.Series(dtype=bool)).fillna(False).sum())
+    else:
+        # prefer YIPD, then CIPD, then patient_name
+        def _case_id(row):
+            for c in ["YIPD", "CIPD", "patient_name"]:
+                if c in row and not pd.isna(row[c]) and str(row[c]).strip() != "":
+                    return str(row[c]).strip()
+            return None
+
+        case_ids = ipd.apply(_case_id, axis=1)
+        temp = ipd.copy()
+        temp["_case_id"] = case_ids
+        cases = int(temp["_case_id"].dropna().nunique())
+        # count surgeries by unique case id to avoid double-counting
+        surgeries = int(
+            temp[temp.get("is_surgery", False)]
+            .dropna(subset=["_case_id"])
+            .drop_duplicates(subset=["_case_id"]) 
+            .shape[0]
+        )
     hospital_revenue = money(ipd, "Hospital")
     total_deposit = money(ipd, "Tot AmtDeposit")
     discount = money(ipd, "Discount")
@@ -49,19 +71,43 @@ def executive_kpis(ipd: pd.DataFrame) -> dict[str, float]:
 def by_hospital(ipd: pd.DataFrame) -> pd.DataFrame:
     if ipd.empty:
         return pd.DataFrame()
-    grouped = (
-        ipd.groupby("hospital", dropna=False)
+    temp = ipd.copy()
+    # compute stable case id
+    if "YIPD" in temp.columns or "CIPD" in temp.columns or "patient_name" in temp.columns:
+        def _case_id(row):
+            for c in ["YIPD", "CIPD", "patient_name"]:
+                if c in row and not pd.isna(row[c]) and str(row[c]).strip() != "":
+                    return str(row[c]).strip()
+            return None
+
+        temp["_case_id"] = temp.apply(_case_id, axis=1)
+        case_level = temp.dropna(subset=["_case_id"]).drop_duplicates(subset=["hospital", "_case_id"])
+        cases_grp = case_level.groupby("hospital", dropna=False).size().rename("cases")
+        surgeries_grp = (
+            temp[temp.get("is_surgery", False)]
+            .dropna(subset=["_case_id"]) 
+            .drop_duplicates(subset=["hospital", "_case_id"]) 
+            .groupby("hospital", dropna=False)
+            .size()
+            .rename("surgeries")
+        )
+    else:
+        cases_grp = temp.groupby("hospital", dropna=False).size().rename("cases")
+        surgeries_grp = temp.groupby("hospital", dropna=False)["is_surgery"].sum().rename("surgeries")
+
+    agg = (
+        temp.groupby("hospital", dropna=False)
         .agg(
-            cases=("patient_name", "count"),
-            surgeries=("is_surgery", "sum"),
             los_days=("los_days", "mean"),
             total_deposit=("Tot AmtDeposit", "sum"),
             hospital_revenue=("Hospital", "sum"),
             hlr_amount=("HLR Amt", "sum"),
             discount=("Discount", "sum"),
         )
-        .reset_index()
     )
+    grouped = agg.join(cases_grp, how="left").join(surgeries_grp, how="left").reset_index()
+    grouped["cases"] = grouped["cases"].fillna(0).astype(int)
+    grouped["surgeries"] = grouped["surgeries"].fillna(0).astype(int)
     grouped["revenue_per_case"] = grouped["hospital_revenue"] / grouped["cases"].replace(0, pd.NA)
     grouped["surgery_rate"] = grouped["surgeries"] / grouped["cases"].replace(0, pd.NA)
     grouped["discount_rate"] = grouped["discount"] / grouped["total_deposit"].replace(0, pd.NA)
@@ -71,19 +117,54 @@ def by_hospital(ipd: pd.DataFrame) -> pd.DataFrame:
 def monthly(ipd: pd.DataFrame) -> pd.DataFrame:
     if ipd.empty:
         return pd.DataFrame()
-    return (
-        ipd.groupby(["month_order", "month", "hospital"], dropna=False)
-        .agg(
-            cases=("patient_name", "count"),
-            surgeries=("is_surgery", "sum"),
-            total_deposit=("Tot AmtDeposit", "sum"),
-            hospital_revenue=("Hospital", "sum"),
-            discounts=("Discount", "sum"),
-            cash_cases=("TPA", lambda s: s.astype(str).str.upper().eq("CASH").sum()),
+    temp = ipd.copy()
+    # derive case id
+    if any(c in temp.columns for c in ["YIPD", "CIPD", "patient_name"]):
+        def _case_id(row):
+            for c in ["YIPD", "CIPD", "patient_name"]:
+                if c in row and not pd.isna(row[c]) and str(row[c]).strip() != "":
+                    return str(row[c]).strip()
+            return None
+
+        temp["_case_id"] = temp.apply(_case_id, axis=1)
+        # case-level counts per month/hospital
+        case_level = temp.dropna(subset=["_case_id"]).drop_duplicates(subset=["_case_id", "month", "hospital"])
+        cases = case_level.groupby(["month_order", "month", "hospital"], dropna=False).size().rename("cases")
+        surgeries = (
+            temp[temp.get("is_surgery", False)]
+            .dropna(subset=["_case_id"]) 
+            .drop_duplicates(subset=["_case_id", "month", "hospital"]) 
+            .groupby(["month_order", "month", "hospital"], dropna=False)
+            .size()
+            .rename("surgeries")
         )
-        .reset_index()
-        .sort_values(["month_order", "hospital"])
-    )
+        agg = (
+            temp.groupby(["month_order", "month", "hospital"], dropna=False)
+            .agg(
+                total_deposit=("Tot AmtDeposit", "sum"),
+                hospital_revenue=("Hospital", "sum"),
+                discounts=("Discount", "sum"),
+                cash_cases=("TPA", lambda s: s.astype(str).str.upper().eq("CASH").sum()),
+            )
+        )
+        out = agg.join(cases, how="left").join(surgeries, how="left").reset_index()
+        out["cases"] = out["cases"].fillna(0).astype(int)
+        out["surgeries"] = out["surgeries"].fillna(0).astype(int)
+        return out.sort_values(["month_order", "hospital"])
+    else:
+        return (
+            temp.groupby(["month_order", "month", "hospital"], dropna=False)
+            .agg(
+                cases=("patient_name", "count"),
+                surgeries=("is_surgery", "sum"),
+                total_deposit=("Tot AmtDeposit", "sum"),
+                hospital_revenue=("Hospital", "sum"),
+                discounts=("Discount", "sum"),
+                cash_cases=("TPA", lambda s: s.astype(str).str.upper().eq("CASH").sum()),
+            )
+            .reset_index()
+            .sort_values(["month_order", "hospital"])
+        )
 
 
 def cost_mix(ipd: pd.DataFrame) -> pd.DataFrame:
