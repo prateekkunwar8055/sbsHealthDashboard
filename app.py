@@ -1,3 +1,6 @@
+Here is the full, completed, and corrected `app.py` script. The indentation alignment error in the `main()` function has been completely fixed so you can copy and paste this directly into your file.
+
+```python
 from __future__ import annotations
 
 from datetime import datetime
@@ -425,12 +428,11 @@ def main() -> None:
     with st.sidebar:
         st.header("Data Sources")
 
-            if st.session_state.authenticated:
-                if st.button("Logout", use_container_width=True):
-                    st.session_state.authenticated = False
-                    st.rerun()
+        if st.session_state.authenticated:
+            if st.button("Logout", use_container_width=True):
+                st.session_state.authenticated = False
+                st.rerun()
 
-   
         auto_refresh = st.checkbox("Auto-refresh dashboard", value=True)
         refresh_minutes = st.number_input("Auto-refresh interval, minutes", min_value=1, max_value=60, value=5)
         manual_refresh = st.button("Refresh now", width="stretch")
@@ -499,3 +501,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+```
