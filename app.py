@@ -62,27 +62,39 @@ def authenticate() -> None:
             st.markdown("### Secure login")
             if st.button("Log out"):
                 st.session_state.pop("authenticated", None)
-                st.experimental_rerun()
+                st.sidebar.success("Logged out successfully.")
+                st.stop()
         return
 
     credentials = get_auth_credentials()
     expected_username, expected_password = credentials if credentials else ("admin", "admin")
     if credentials is None:
-        st.sidebar.info("Streamlit auth secrets are not configured. Set secrets to protect the app.")
+        st.sidebar.info("Welcome to SBS Hospital BI Dashboard!")
 
     display_logo()
     st.sidebar.markdown("### Secure login")
+
+    # initialize keys so inputs persist across reruns
+    if "auth_username" not in st.session_state:
+        st.session_state["auth_username"] = ""
+    if "auth_password" not in st.session_state:
+        st.session_state["auth_password"] = ""
+
     username = st.sidebar.text_input("Username", key="auth_username")
     password = st.sidebar.text_input("Password", type="password", key="auth_password")
-    if not username or not password:
-        st.sidebar.warning("Enter your credentials to continue.")
-        st.stop()
-    if username != expected_username or password != expected_password:
-        st.sidebar.error("Invalid username or password.")
+    login_clicked = st.sidebar.button("Login")
+
+    # Wait for explicit login click to validate — avoids accidental partial-entry reruns
+    if not login_clicked:
+        st.sidebar.info("Enter credentials and click Login to continue.")
         st.stop()
 
-    # Mark session as authenticated so subsequent reruns keep the user logged in
-    st.session_state["authenticated"] = True
+    # Validate credentials on submit
+    if username == expected_username and password == expected_password:
+        st.session_state["authenticated"] = True
+        return
+    st.sidebar.error("Invalid username or password.")
+    st.stop()
 
 
 st.set_page_config(page_title=APP_TITLE, page_icon=":bar_chart:", layout="wide")
