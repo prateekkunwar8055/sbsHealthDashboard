@@ -67,7 +67,7 @@ def authenticate() -> None:
     credentials = get_auth_credentials()
     expected_username, expected_password = credentials if credentials else ("admin", "admin")
     if credentials is None:
-        st.sidebar.info("Streamlit auth secrets are not configured. Set secrets to protect the app.")
+        st.sidebar.info("Welcome to SBS Hospital BI Dashboard")
 
     display_logo()
     st.sidebar.markdown("### Secure login")
