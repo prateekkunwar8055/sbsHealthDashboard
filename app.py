@@ -21,7 +21,7 @@ from dashboard.metrics import (
 from dashboard.parsing import build_dashboard_data
 
 
-APP_TITLE = "Hospital BI Dashboard"
+APP_TITLE = "SBS Hospital BI Dashboard"
 
 # Public Google Sheet URLs to load by default when requested in the sidebar
 DEFAULT_GOOGLE_SHEETS: dict[str, str] = {
